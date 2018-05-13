@@ -65,7 +65,7 @@ static void write_reg(char data)
 	Write(ctx, &addr, 1);
 	Write(ctx, &cmd, 1);
 	Write(ctx, &data, 1);
-	printf("NACK: %d\n", GetAck(ctx));
+	//printf("NACK: %d\n", GetAck(ctx)); // FIXME i'm always getting a NACK
 	Stop(ctx);
 }
 
@@ -77,7 +77,6 @@ static void write_data(const char *data)
 	Write(ctx, &addr, 1);
 	Write(ctx, &cmd, 1);
 	Write(ctx, data, 16);
-	printf("NACK: %d\n", GetAck(ctx));
 	Stop(ctx);
 }
 
@@ -200,9 +199,17 @@ int main(int argc, char *argv[])
 		write_reg(SSD1306_PAGEADDR);
 		write_reg(0); // Page start address (0 = reset)
 		write_reg(3); // Page end address
-		for (uint16_t i=0; i<(WIDTH*HEIGHT/8); i++) {
-			char data[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
-			write_data(data);
+		while (1) {
+			for (uint16_t i=0; i<(WIDTH*HEIGHT/8/16); i++) {
+				char data[16] = { 0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0, 0, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7 };
+				usleep(100000);
+				write_data(data);
+			}
+			for (uint16_t i=0; i<(WIDTH*HEIGHT/8/16); i++) {
+				char data[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+				usleep(100000);
+				write_data(data);
+			}
 		}
 	}
 	return retval;
