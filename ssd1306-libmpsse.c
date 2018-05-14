@@ -57,33 +57,50 @@
 
 static struct mpsse_context *ctx = NULL;
 
-static void write_reg(char data)
+static bool write_once(char cmd, const char *data, size_t len)
 {
 	const char addr = 0x78;
-	const char cmd = 0;
 	Start(ctx);
 	Write(ctx, &addr, 1);
+	if (GetAck(ctx)) goto end;
 	Write(ctx, &cmd, 1);
-	Write(ctx, &data, 1);
-	//printf("NACK: %d\n", GetAck(ctx)); // FIXME i'm always getting a NACK
+	if (GetAck(ctx)) goto end;
+	Write(ctx, data, len);
+	if (GetAck(ctx)) goto end;
 	Stop(ctx);
+	return true;
+end:
+	// got NACK
+	Stop(ctx);
+	return false;
+}
+
+static bool write_reg_once(char data)
+{
+	return write_once(0, &data, 1);
+}
+
+static bool write_data_once(const char *data)
+{
+	return write_once(0x40, data, 16);
+}
+
+static void write_reg(char data)
+{
+	while (!write_reg_once(data));
 }
 
 static void write_data(const char *data)
 {
-	const char addr = 0x78;
-	const char cmd = 0x40;
-	Start(ctx);
-	Write(ctx, &addr, 1);
-	Write(ctx, &cmd, 1);
-	Write(ctx, data, 16);
-	Stop(ctx);
+	write_data_once(data);
 }
 
 /* Init sequence taken from the Adafruit SSD1306 Arduino library */
-static int init_display()
+static bool init_display()
 {
-	write_reg(SSD1306_DISPLAYOFF);                    // 0xAE
+	if (!write_reg_once(SSD1306_DISPLAYOFF)) {// 0xAE
+		return false;
+	}
 
 	/* Set Display Clock Divide Ratio/ Oscillator Frequency */
 	write_reg(SSD1306_SETDISPLAYCLOCKDIV);            // 0xD5
@@ -153,7 +170,7 @@ static int init_display()
 	/* Set Display ON */
 	write_reg(SSD1306_DISPLAYON);//--turn on oled panel
 
-	return 0;
+	return true;
 }
 
 #if 0
@@ -191,7 +208,10 @@ int main(int argc, char *argv[])
 	int retval = EXIT_FAILURE;
 
 	if ((ctx = MPSSE(I2C, 400000, MSB)) != NULL && ctx->open) {
-		init_display();
+		if (!init_display()) {
+			fprintf(stderr, "The SSD1306 doesn't ACK, check the wiring!\n");
+			return retval;
+		}
 		write_reg(SSD1306_COLUMNADDR);
 		write_reg(0);   // Column start address (0 = reset)
 		write_reg(WIDTH-1); // Column end address (127 = reset)
@@ -211,6 +231,8 @@ int main(int argc, char *argv[])
 				write_data(data);
 			}
 		}
+	} else {
+		fprintf(stderr, "Couldn't open a FTDI device!\n");
 	}
 	return retval;
 }
